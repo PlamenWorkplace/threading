@@ -22,12 +22,14 @@
 #include "input.h"
 
 // TODO: Global variables: mutexes, data structures, etc...
+#define TRAFFIC_LIGHTS 10
+pthread_mutex_t      intersection_mutex          = PTHREAD_MUTEX_INITIALIZER;
 
 /* 
  * curr_car_arrivals[][][]
  *
  * A 3D array that stores the arrivals that have occurred
- * The first two indices determine the entry lane: first index is Side, second index is Direction
+ * The first two indices determine the entry lane: first index is Side, second index is Direction.
  * curr_arrivals[s][d] returns an array of all arrivals for the entry lane on side s for direction d,
  *   ordered in the same order as they arrived
  */
@@ -48,7 +50,7 @@ static sem_t car_sem[4][4];
  * A function for supplying car arrivals to the intersection
  * This should be executed by a separate thread
  */
-static void* supply_cars()
+static void *supply_cars(void *arg)
 {
   int t = 0;
   int num_curr_arrivals[4][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}};
@@ -77,8 +79,25 @@ static void* supply_cars()
  *
  * A function that implements the behaviour of a traffic light
  */
-static void* manage_light(void* arg)
+static void *manage_light(void *arg)
 {
+  Car_Arrival *args = (Car_Arrival *) arg;
+  Side side = args->side;
+  Direction direction = args->direction;
+  free(args);  // Free the allocated memory
+
+  int num_curr_arrival = 0;
+  while (true)
+  {
+    sem_wait(&car_sem[side][direction]);
+    pthread_mutex_lock (&intersection_mutex);
+    printf("traffic light %d %d turns green at time %d for car %d\n", side, direction, get_time_passed(), curr_car_arrivals[side][direction][num_curr_arrival].id);
+    sleep(CROSS_TIME);
+    printf("traffic light %d %d turns red at time %d\n", side, direction, get_time_passed());
+    pthread_mutex_unlock (&intersection_mutex);
+    num_curr_arrival += 1;
+  }
+  
   // TODO:
   // while not all arrivals have been handled, repeatedly:
   //  - wait for an arrival using the semaphore for this traffic light
@@ -91,6 +110,34 @@ static void* manage_light(void* arg)
   return(0);
 }
 
+void createTrafficLightThreads(pthread_t my_threads[])
+{
+  int entry_lanes[TRAFFIC_LIGHTS][2] = { 
+    {EAST, LEFT}, {EAST, STRAIGHT}, {EAST, RIGHT},
+    {SOUTH, LEFT}, {SOUTH, STRAIGHT}, {SOUTH, RIGHT}, {SOUTH, UTURN}, 
+    {WEST, LEFT}, {WEST, STRAIGHT}, {WEST, RIGHT} 
+  };
+
+  for (int i = 0; i < TRAFFIC_LIGHTS; i++)
+  {
+    Car_Arrival *args = malloc(sizeof(Car_Arrival)); // New allocation for each thread
+
+    if (!args) 
+    {
+      fprintf(stderr, "Error: Memory allocation failed!\n");
+      exit(EXIT_FAILURE);
+    }
+
+    args->side = entry_lanes[i][0];
+    args->direction = entry_lanes[i][1];
+
+    if (pthread_create(&my_threads[i], NULL, manage_light, args) != 0) 
+    {
+      fprintf(stderr, "Error: Could not create thread %d!\n", i);
+      exit(EXIT_FAILURE);
+    }
+  }
+}
 
 int main(int argc, char * argv[])
 {
@@ -105,12 +152,33 @@ int main(int argc, char * argv[])
 
   // start the timer
   start_time();
+
+  pthread_t my_threads[TRAFFIC_LIGHTS + 1];
   
-  // TODO: create a thread per traffic light that executes manage_light
+  // create a thread per traffic light that executes manage_light
+  createTrafficLightThreads(my_threads);
 
-  // TODO: create a thread that executes supply_cars()
+  // create a thread that executes supply_cars()
+  if (pthread_create(&my_threads[TRAFFIC_LIGHTS], NULL, supply_cars, NULL) != 0) 
+  {
+    fprintf(stderr, "Error: Could not create thread %d!\n", TRAFFIC_LIGHTS);
+    exit(EXIT_FAILURE);
+  }
 
-  // TODO: wait for all threads to finish
+  // wait for all threads to finish
+  sleep_until_arrival(END_TIME);
+  for (int i = 0; i < TRAFFIC_LIGHTS + 1; i++)
+  {
+    if (pthread_cancel(my_threads[i]) != 0) 
+    {
+      fprintf(stderr, "Error: Could not cancel thread! %d\n", i);
+    }
+    
+    if (pthread_join(my_threads[i], NULL) != 0) 
+    {
+      fprintf(stderr, "Error: Could not join thread %d!\n", i);
+    } 
+  }
 
   // destroy semaphores
   for (int i = 0; i < 4; i++)
