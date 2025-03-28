@@ -23,7 +23,13 @@
 
 // TODO: Global variables: mutexes, data structures, etc...
 #define TRAFFIC_LIGHTS 10
-pthread_mutex_t      intersection_mutex          = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t m1 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t m3 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t m4 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t m5 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t m6 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t m7 = PTHREAD_MUTEX_INITIALIZER;
 
 /* 
  * curr_car_arrivals[][][]
@@ -73,6 +79,69 @@ static void *supply_cars(void *arg)
   return(0);
 }
 
+void lockMutexes(Side side, Direction direction)
+{
+  if ( (side == EAST && direction == LEFT) || (side == SOUTH && direction == LEFT) || (side == WEST && direction == STRAIGHT) )
+  {
+    pthread_mutex_lock(&m1);
+  }
+  if ( (side == EAST && direction == LEFT) || (side == SOUTH && direction == STRAIGHT) || (side == WEST && direction == STRAIGHT) )
+  {
+    pthread_mutex_lock(&m2);
+  }
+  if ( (side == EAST && direction == LEFT) || (side == SOUTH && direction == UTURN) || (side == WEST && direction == RIGHT) )
+  {
+    pthread_mutex_lock(&m3);
+  }
+  if ( (side == EAST && direction == STRAIGHT) || (side == SOUTH && direction == STRAIGHT) || (side == WEST && direction == LEFT) )
+  {
+    pthread_mutex_lock(&m4);
+  }
+  if ( (side == EAST && direction == STRAIGHT) || (side == SOUTH && direction == LEFT) || (side == WEST && direction == LEFT) )
+  {
+    pthread_mutex_lock(&m5);
+  }
+  if ( (side == EAST && direction == RIGHT) || (side == SOUTH && direction == STRAIGHT) || (side == WEST && direction == LEFT) )
+  {
+    pthread_mutex_lock(&m6);
+  }
+  if ( (side == SOUTH && direction == RIGHT) || (side == WEST && direction == STRAIGHT) )
+  {
+    pthread_mutex_lock(&m7);
+  }
+}
+
+void unlockMutexes(Side side, Direction direction)
+{
+  if ( (side == EAST && direction == LEFT) || (side == SOUTH && direction == LEFT) || (side == WEST && direction == STRAIGHT) )
+  {
+    pthread_mutex_unlock(&m1);
+  }
+  if ( (side == EAST && direction == LEFT) || (side == SOUTH && direction == STRAIGHT) || (side == WEST && direction == STRAIGHT) )
+  {
+    pthread_mutex_unlock(&m2);
+  }
+  if ( (side == EAST && direction == LEFT) || (side == SOUTH && direction == UTURN) || (side == WEST && direction == RIGHT) )
+  {
+    pthread_mutex_unlock(&m3);
+  }
+  if ( (side == EAST && direction == STRAIGHT) || (side == SOUTH && direction == STRAIGHT) || (side == WEST && direction == LEFT) )
+  {
+    pthread_mutex_unlock(&m4);
+  }
+  if ( (side == EAST && direction == STRAIGHT) || (side == SOUTH && direction == LEFT) || (side == WEST && direction == LEFT) )
+  {
+    pthread_mutex_unlock(&m5);
+  }
+  if ( (side == EAST && direction == RIGHT) || (side == SOUTH && direction == STRAIGHT) || (side == WEST && direction == LEFT) )
+  {
+    pthread_mutex_unlock(&m6);
+  }
+  if ( (side == SOUTH && direction == RIGHT) || (side == WEST && direction == STRAIGHT) )
+  {
+    pthread_mutex_unlock(&m7);
+  }
+}
 
 /*
  * manage_light(void* arg)
@@ -90,22 +159,13 @@ static void *manage_light(void *arg)
   while (true)
   {
     sem_wait(&car_sem[side][direction]);
-    pthread_mutex_lock (&intersection_mutex);
+    lockMutexes(side, direction);
     printf("traffic light %d %d turns green at time %d for car %d\n", side, direction, get_time_passed(), curr_car_arrivals[side][direction][num_curr_arrival].id);
     sleep(CROSS_TIME);
     printf("traffic light %d %d turns red at time %d\n", side, direction, get_time_passed());
-    pthread_mutex_unlock (&intersection_mutex);
+    unlockMutexes(side, direction);
     num_curr_arrival += 1;
   }
-  
-  // TODO:
-  // while not all arrivals have been handled, repeatedly:
-  //  - wait for an arrival using the semaphore for this traffic light
-  //  - lock the right mutex(es)
-  //  - make the traffic light turn green
-  //  - sleep for CROSS_TIME seconds
-  //  - make the traffic light turn red
-  //  - unlock the right mutex(es)
 
   return(0);
 }
